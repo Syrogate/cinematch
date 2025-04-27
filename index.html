@@ -1,0 +1,175 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cinematch Movie Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.9/babel.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const App = () => {
+      const [searchTerm, setSearchTerm] = useState('');
+      const [movies, setMovies] = useState([]);
+      const [selectedTconst, setSelectedTconst] = useState('');
+      const [movieData, setMovieData] = useState(null);
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      // Fetch movie suggestions based on search term
+      useEffect(() => {
+        if (searchTerm.length < 2) {
+          setMovies([]);
+          return;
+        }
+        const fetchMovies = async () => {
+          try {
+            const response = await fetch('http://localhost:3000/api/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title: searchTerm }),
+            });
+            if (!response.ok) throw new Error('Failed to fetch movies');
+            const data = await response.json();
+            setMovies(data);
+          } catch (err) {
+            setError(err.message);
+          }
+        };
+        const debounce = setTimeout(fetchMovies, 300);
+        return () => clearTimeout(debounce);
+      }, [searchTerm]);
+
+      // Fetch movie details when a movie is selected
+      const fetchMovieDetails = async (tconst) => {
+        setError('');
+        setLoading(true);
+        try {
+          const response = await fetch('http://localhost:3000/api/movie', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tconst }),
+          });
+          if (!response.ok) throw new Error('Failed to fetch movie details');
+          const data = await response.json();
+          setMovieData(data[0]);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleSelectMovie = (tconst, title) => {
+        setSelectedTconst(tconst);
+        setSearchTerm(title);
+        setMovies([]);
+        fetchMovieDetails(tconst);
+      };
+
+      return (
+        <div className="container mx-auto p-4">
+          <h1 className="text-3xl font-bold text-center mb-6">Cinematch Movie Search</h1>
+          <div className="relative mb-6">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search for a movie (e.g., The Shawshank Redemption)"
+              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {movies.length > 0 && (
+              <ul className="absolute z-10 w-full bg-white border rounded-md mt-1 max-h-60 overflow-y-auto">
+                {movies.map((movie) => (
+                  <li
+                    key={movie.tconst}
+                    onClick={() => handleSelectMovie(movie.tconst, movie.primary_title)}
+                    className="p-2 hover:bg-blue-100 cursor-pointer"
+                  >
+                    {movie.primary_title} ({movie.start_year})
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {error && <p className="text-red-500 text-center">{error}</p>}
+          {loading && <p className="text-center">Loading...</p>}
+          {movieData && (
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <h2 className="text-2xl font-semibold mb-4">{movieData.primary_title}</h2>
+              <p><strong>Year:</strong> {movieData.start_year || 'N/A'}</p>
+              <p><strong>Genres:</strong> {movieData.genres || 'N/A'}</p>
+              <p><strong>Runtime:</strong> {movieData.runtime_minutes ? `${movieData.runtime_minutes} min` : 'N/A'}</p>
+              <p><strong>Rating:</strong> {movieData.average_rating ? movieData.average_rating.toFixed(1) : 'N/A'} ({movieData.num_votes || 0} votes)</p>
+              <p><strong>Directors:</strong> {movieData.directors?.length ? movieData.directors.join(', ') : 'N/A'}</p>
+              <p><strong>Actors:</strong> {movieData.actors?.length ? movieData.actors.join(', ') : 'N/A'}</p>
+              <h3 className="text-xl font-semibold mt-6 mb-4">Similar Movies</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {movieData.similar_movies?.length ? (
+                  movieData.similar_movies.map((movie, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-lg shadow">
+                      <h4 className="font-semibold">{movie.primary_title}</h4>
+                      <p><strong>Year:</strong> {movie.start_year || 'N/A'}</p>
+                      <p><strong>Genres:</strong> {movie.genres || 'N/A'}</p>
+                      <p><strong>Rating:</strong> {movie.average_rating ? movie.average_rating.toFixed(1) : 'N/A'}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p>No similar movies found.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

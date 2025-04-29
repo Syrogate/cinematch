@@ -305,22 +305,22 @@ app.post('/api/actor', async (req, res) => {
         'Unknown'
       ) AS actor_age,
       IFNULL(n.primary_profession, 'Unknown') AS primary_profession,
-      STRING_AGG(DISTINCT t.primary_title, ', ') AS known_for_movies,
-      STRING_AGG(
-        DISTINCT CONCAT(
-          IFNULL(t.primary_title, 'Unknown'), 
-          ' (', 
-          IFNULL(
-            REGEXP_REPLACE(
-              JSON_EXTRACT_ARRAY(tp.characters)[SAFE_OFFSET(0)],
-              r'^"(.*)"$', r'\1'
-            ),
-            'Unknown'
-          ),
-          ')'
-        ),
-        ', '
-      ) AS movie_and_character
+      ARRAY_AGG(DISTINCT t.primary_title IGNORE NULLS) AS known_for_movies,
+      ARRAY_AGG(
+        DISTINCT TO_JSON_STRING(
+          STRUCT(
+            IFNULL(t.primary_title, 'Unknown') AS title,
+            IFNULL(
+              REGEXP_REPLACE(
+                JSON_EXTRACT_ARRAY(tp.characters)[SAFE_OFFSET(0)],
+                r'^"(.*)"$', r'\\1'
+              ),
+              'Unknown'
+            ) AS character
+          )
+        )
+        IGNORE NULLS
+      ) AS title_and_character
     FROM \`bigquery-public-data.imdb.name_basics\` n
     LEFT JOIN UNNEST(SPLIT(n.known_for_titles, ',')) kft ON TRUE
     LEFT JOIN \`bigquery-public-data.imdb.title_basics\` t
@@ -338,13 +338,18 @@ app.post('/api/actor', async (req, res) => {
   const params = { nconst };
 
   try {
-    const [rows] = await bigquery.query({ query: actor_query, params });
+    const [rows] = await bigquery.query({ query: actor_query, params, useLegacySql: false });
+    // Parse the title_and_character JSON strings into objects
+    if (rows.length > 0 && rows[0].title_and_character) {
+      rows[0].title_and_character = rows[0].title_and_character.map(str => JSON.parse(str));
+    }
     res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 //----------------------------MAHALAKSHMI CODE ENDS HERE----------------------------
 

@@ -290,8 +290,54 @@ app.post('/api/actor', async (req, res) => {
     return res.status(400).json({ error: 'Actor ID is required' });
   }
 
+
+   // Base query
+  const actor_query = `
+    SELECT
+    n.nconst,
+   IFNULL(n.primary_name, 'Unknown') AS actor_name,
+   IFNULL(n.birth_year, 0) AS actor_birth_year,
+   IFNULL(
+    CAST(
+      CASE 
+        WHEN n.birth_year IS NOT NULL AND n.birth_year != 0 THEN 2025 - n.birth_year
+        ELSE NULL
+      END AS STRING
+    ),
+    'Unknown'
+   ) AS actor_age,
+   IFNULL(n.primary_profession, 'Unknown') AS primary_profession,
+   STRING_AGG(DISTINCT t.primary_title, ', ') AS known_for_movies,
+   STRING_AGG(
+    DISTINCT CONCAT(
+      IFNULL(t.primary_title, 'Unknown'), 
+      ' (', 
+      IFNULL(
+        REGEXP_REPLACE(
+          JSON_EXTRACT_ARRAY(tp.characters)[SAFE_OFFSET(0)],
+          r'^"(.*)"$', r'\1'
+        ),
+        'Unknown'
+      ),
+      ')'
+    ),
+    ', '
+  ) AS movie_and_character
+    FROM `bigquery-public-data.imdb.name_basics` n
+    LEFT JOIN UNNEST(SPLIT(n.known_for_titles, ',')) kft ON TRUE
+   LEFT JOIN `bigquery-public-data.imdb.title_basics` t
+  ON t.tconst = kft AND t.title_type = 'movie'
+   LEFT JOIN `bigquery-public-data.imdb.title_principals` tp
+  ON tp.tconst = t.tconst AND tp.nconst = n.nconst AND tp.category = 'actor'
+   WHERE
+  IFNULL(SPLIT(n.primary_profession, ',')[SAFE_OFFSET(0)], '') = 'actor'
+  GROUP BY
+  n.nconst, n.primary_name, n.birth_year, n.primary_profession
+ LIMIT 10
+  `;
+
   // Respond with a fixed value for now
-  const actorData = {
+  /*const actorData = {
     name: "Leonardo DiCaprio",
     age: 48,
     profession: "Actor, Producer",
@@ -302,8 +348,16 @@ app.post('/api/actor', async (req, res) => {
       { title: "The Revenant", character: "Hugh Glass" },
       { title: "Shutter Island", character: "Teddy Daniels" },
     ],
-  };
+  };*/
+    const params = { nconst };
 
+  try {
+    const [rows] = await bigquery.query({ query: actor_query, params });
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(actorData);
 });
 //----------------------------MAHALAKSHMI CODE ENDS HERE----------------------------

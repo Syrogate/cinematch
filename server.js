@@ -11,6 +11,8 @@ redisClient.connect().catch(console.error);
 app.use(cors());
 app.use(express.json());
 
+
+//--------------------------------CALEBS CODE STARTS HERE--------------------------------
 const searchQuery = `
   SELECT
     tconst,
@@ -182,6 +184,129 @@ app.post('/api/movie', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+//--------------------------------CALEBS CODE ENDS HERE--------------------------------
+
+
+
+
+
+
+
+
+
+
+//---------------------------------------VENKATS CODE STARTS HERE--------------------------------
+app.post('/api/filter', async (req, res) => {
+  const { genre, decade, duration, category, includeAdult } = req.body;
+
+  // Base query
+  let query = `
+    SELECT 
+      b.tconst,
+      b.primary_title,
+      b.start_year,
+      b.genres,
+      b.runtime_minutes,
+      r.average_rating,
+      r.num_votes
+    FROM \`bigquery-public-data.imdb.title_basics\` AS b
+    JOIN \`bigquery-public-data.imdb.title_ratings\` AS r
+    ON b.tconst = r.tconst
+    WHERE b.title_type = 'movie'
+      AND b.start_year IS NOT NULL
+  `;
+
+  // Filters
+  const params = {};
+
+  if (!includeAdult) {
+    query += ` AND b.is_adult = 0`;
+  }
+
+  if (genre) {
+    query += ` AND b.genres LIKE @genre`;
+    params.genre = `%${genre}%`;
+  }
+
+  if (decade) {
+    const startYear = parseInt(decade, 10);
+    const endYear = startYear + 9;
+    query += ` AND b.start_year BETWEEN @startYear AND @endYear`;
+    params.startYear = startYear;
+    params.endYear = endYear;
+  }
+
+  if (duration) {
+    if (duration === 'short') {
+      query += ` AND b.runtime_minutes < 60`;
+    } else if (duration === 'medium') {
+      query += ` AND b.runtime_minutes BETWEEN 60 AND 120`;
+    } else if (duration === 'long') {
+      query += ` AND b.runtime_minutes > 120`;
+    }
+  }
+
+  // Apply category sorting and num_votes logic
+if (category === 'popular') {
+  query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+} else if (category === 'underrated') {
+  query += ` AND r.average_rating > 8.0 AND r.num_votes < 10000 ORDER BY r.average_rating DESC`;
+} else if (category === 'controversial') {
+  query += ` AND r.average_rating BETWEEN 5.5 AND 7.0 AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+} else {
+  // Default ordering if no special category selected
+  query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+}
+
+  query += ` LIMIT 10;`;
+
+  try {
+    const queryOptions = {
+      query,
+      params,
+    };
+
+    const [rows] = await bigquery.query(queryOptions);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+//---------------------------------------VENKATS CODE ENDS HERE--------------------------------
+
+
+
+
+
+
+
+
+//----------------------------MAHALAKSHMI CODE STARTS HERE----------------------------
+app.post('/api/actor', async (req, res) => {
+  const { nconst } = req.body;
+
+  if (!nconst) {
+    return res.status(400).json({ error: 'Actor ID is required' });
+  }
+
+  // Respond with a fixed value for now
+  const actorData = {
+    name: "Leonardo DiCaprio",
+    age: 48,
+    profession: "Actor, Producer",
+    famous_movies: ["Inception", "Titanic", "The Revenant", "Shutter Island"],
+    movies: [
+      { title: "Inception", character: "Dom Cobb" },
+      { title: "Titanic", character: "Jack Dawson" },
+      { title: "The Revenant", character: "Hugh Glass" },
+      { title: "Shutter Island", character: "Teddy Daniels" },
+    ],
+  };
+
+  res.json(actorData);
+});
+//----------------------------MAHALAKSHMI CODE ENDS HERE----------------------------
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

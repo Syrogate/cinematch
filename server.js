@@ -249,6 +249,8 @@ app.post('/api/movie', async (req, res) => {
       params: { target_tconst: tconst },
     };
     const [rows] = await bigquery.query(queryOptions);
+    //console.log('Movie Query:', movieQuery);
+    //console.log('Movie Query Result:', rows);
     if (!rows.length) {
       return res.status(404).json({ error: 'Movie not found' });
     }
@@ -264,7 +266,7 @@ app.post('/api/movie', async (req, res) => {
 
 //---------------------------------------VENKATS CODE STARTS HERE--------------------------------
 app.post('/api/filter', async (req, res) => {
-  const { genre, decade, duration, category, includeAdult } = req.body;
+  const { searchTerm, genre, decade, duration, category, includeAdult } = req.body;
 
   // Base query
   let query = `
@@ -288,6 +290,11 @@ app.post('/api/filter', async (req, res) => {
 
   if (!includeAdult) {
     query += ` AND b.is_adult = 0`;
+  }
+
+  if (searchTerm) {
+    query += ` AND b.primary_title LIKE @searchTerm`;
+    params.searchTerm = `%${searchTerm}%`;
   }
 
   if (genre) {
@@ -333,7 +340,39 @@ app.post('/api/filter', async (req, res) => {
       params,
     };
 
+    //console.log('Filter Query:', queryOptions);
     const [rows] = await bigquery.query(queryOptions);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/actors', async (req, res) => {
+  const { name } = req.body;
+
+  if (!name || name.length < 2) {
+    return res.status(400).json({ error: 'Actor name must be at least 2 characters' });
+  }
+
+  const actorSearchQuery = `
+    SELECT
+      nconst,
+      primary_name AS actor_name
+    FROM
+      \`bigquery-public-data.imdb.name_basics\`
+    WHERE
+      primary_name LIKE @name
+    ORDER BY
+      primary_name ASC
+    LIMIT 10;
+  `;
+
+  const params = { name: `%${name}%` };
+
+  try {
+    const [rows] = await bigquery.query({ query: actorSearchQuery, params });
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -349,6 +388,8 @@ app.post('/api/actor', async (req, res) => {
   if (!nconst) {
     return res.status(400).json({ error: 'Actor ID is required' });
   }
+
+  //console.log('Received nconst value:', nconst);
 
   const actor_query = `
     SELECT

@@ -11,7 +11,6 @@ redisClient.connect().catch(console.error);
 app.use(cors());
 app.use(express.json());
 
-
 //--------------------------------CALEBS CODE STARTS HERE--------------------------------
 const searchQuery = `
   SELECT
@@ -24,13 +23,16 @@ const searchQuery = `
     title_type = 'movie'
     AND genres IS NOT NULL
     AND primary_title LIKE @title
+    AND start_year >= 1980
+    AND start_year <= 2025
   ORDER BY
     start_year DESC
   LIMIT 10;
 `;
 
 const movieQuery = `
-WITH MovieDetails AS (
+-- Step 1: Precompute target movie details with strict filters
+WITH TargetMovie AS (
   SELECT
     tb.tconst,
     tb.primary_title,
@@ -42,31 +44,45 @@ WITH MovieDetails AS (
     ARRAY_AGG(DISTINCT IF(tp.category = 'director', nb.primary_name, NULL) IGNORE NULLS) AS directors,
     ARRAY_AGG(DISTINCT IF(tp.category IN ('actor', 'actress'), nb.primary_name, NULL) IGNORE NULLS) AS actors,
     ARRAY_AGG(DISTINCT IF(tp.category IN ('actor', 'actress'), tp.nconst, NULL) IGNORE NULLS) AS actor_nconsts,
-    ARRAY_AGG(DISTINCT genre) AS genre_list
+    ARRAY(SELECT DISTINCT TRIM(genre) FROM UNNEST(SPLIT(COALESCE(tb.genres, ''), ',')) AS genre WHERE TRIM(genre) != '') AS genre_list
   FROM
     \`bigquery-public-data.imdb.title_basics\` tb
   LEFT JOIN
     \`bigquery-public-data.imdb.title_ratings\` tr
   ON
     tb.tconst = tr.tconst
-  JOIN
+  LEFT JOIN
     \`bigquery-public-data.imdb.title_principals\` tp
   ON
     tb.tconst = tp.tconst
-  JOIN
+  LEFT JOIN
     \`bigquery-public-data.imdb.name_basics\` nb
   ON
     tp.nconst = nb.nconst
-  CROSS JOIN
-    UNNEST(SPLIT(COALESCE(tb.genres, ''), ',')) AS genre
   WHERE
-    tb.tconst = @tconst
+    tb.tconst = @target_tconst
     AND tb.title_type = 'movie'
     AND tb.genres IS NOT NULL
+    AND tb.start_year BETWEEN 1980 AND 2025
   GROUP BY
     tb.tconst, tb.primary_title, tb.start_year, tb.genres, tb.runtime_minutes, tr.average_rating, tr.num_votes
 ),
-SimilarMovies AS (
+
+-- Step 2: Create hash tables for genres and actors (materialized for performance)
+GenreHash AS (
+  SELECT DISTINCT TRIM(genre) AS genre
+  FROM TargetMovie, UNNEST(genre_list) AS genre
+  WHERE TRIM(genre) != ''
+),
+
+ActorHash AS (
+  SELECT DISTINCT nconst
+  FROM TargetMovie, UNNEST(actor_nconsts) AS nconst
+  WHERE nconst IS NOT NULL
+),
+
+-- Step 3: Pre-filter candidate movies with strict filters (year, num_votes, title_type)
+FilteredMovies AS (
   SELECT
     tb.tconst,
     tb.primary_title,
@@ -74,47 +90,107 @@ SimilarMovies AS (
     tb.genres,
     tr.average_rating,
     tr.num_votes,
-    COUNT(DISTINCT genre) AS shared_genres,
-    COUNT(DISTINCT tp.nconst) AS shared_actors
+    ARRAY(SELECT TRIM(genre) FROM UNNEST(SPLIT(COALESCE(tb.genres, ''), ',')) AS genre WHERE TRIM(genre) != '') AS genre_list
   FROM
     \`bigquery-public-data.imdb.title_basics\` tb
-  LEFT JOIN
+  JOIN
     \`bigquery-public-data.imdb.title_ratings\` tr
   ON
     tb.tconst = tr.tconst
+  WHERE
+    tb.tconst != @target_tconst
+    AND tb.title_type = 'movie'
+    AND tb.genres IS NOT NULL
+    AND tr.num_votes > 5000 -- Stricter filter to reduce candidates
+    AND tb.start_year BETWEEN 1980 AND 2025
+),
+
+-- Step 4: Compute genre matches using BNL join strategy
+GenreMatches AS (
+  SELECT
+    fm.tconst,
+    fm.primary_title,
+    fm.start_year,
+    fm.genres,
+    fm.average_rating,
+    fm.num_votes,
+    COUNT(DISTINCT gh.genre) AS shared_genres
+  FROM
+    FilteredMovies fm
+  CROSS JOIN
+    UNNEST(fm.genre_list) AS genre
+  JOIN
+    GenreHash gh
+  ON
+    TRIM(genre) = gh.genre
+  GROUP BY
+    fm.tconst, fm.primary_title, fm.start_year, fm.genres, fm.average_rating, fm.num_votes
+  HAVING
+    shared_genres >= 1
+),
+
+-- Step 5: Compute actor matches using BNL join strategy
+ActorMatches AS (
+  SELECT
+    fm.tconst,
+    COUNT(DISTINCT ah.nconst) AS shared_actors
+  FROM
+    FilteredMovies fm
   JOIN
     \`bigquery-public-data.imdb.title_principals\` tp
   ON
-    tb.tconst = tp.tconst
-  CROSS JOIN
-    UNNEST(SPLIT(COALESCE(tb.genres, ''), ',')) AS genre
+    fm.tconst = tp.tconst
+  JOIN
+    ActorHash ah
+  ON
+    tp.nconst = ah.nconst
   WHERE
-    tb.tconst != @tconst
-    AND tb.title_type = 'movie'
-    AND tb.genres IS NOT NULL
-    AND (
-      genre IN (SELECT genre FROM MovieDetails, UNNEST(genre_list) AS genre)
-      OR tp.nconst IN (SELECT nconst FROM MovieDetails, UNNEST(actor_nconsts) AS nconst)
-    )
+    tp.category IN ('actor', 'actress')
   GROUP BY
-    tb.tconst, tb.primary_title, tb.start_year, tb.genres, tr.average_rating, tr.num_votes
+    fm.tconst
   HAVING
-    shared_genres >= 1 OR shared_actors >= 1
+    shared_actors >= 1
+),
+
+-- Step 6: Combine matches and compute similar movies
+SimilarMovies AS (
+  SELECT
+    gm.tconst,
+    gm.primary_title,
+    gm.start_year,
+    gm.genres,
+    gm.average_rating,
+    gm.num_votes,
+    gm.shared_genres,
+    COALESCE(am.shared_actors, 0) AS shared_actors
+  FROM
+    GenreMatches gm
+  LEFT JOIN
+    ActorMatches am
+  ON
+    gm.tconst = am.tconst
+  WHERE
+    gm.shared_genres >= 1 OR COALESCE(am.shared_actors, 0) >= 1
   ORDER BY
-    (shared_genres + shared_actors) DESC, tr.average_rating DESC, tr.num_votes DESC
+    (gm.shared_genres + COALESCE(am.shared_actors, 0)) DESC,
+    gm.average_rating DESC,
+    gm.num_votes DESC
   LIMIT 5
 )
+
+-- Step 7: Final result
 SELECT
-  md.primary_title,
-  md.start_year,
-  md.genres,
-  md.runtime_minutes,
-  md.average_rating,
-  md.num_votes,
-  md.directors,
-  md.actors,
+  tm.primary_title,
+  tm.start_year,
+  tm.genres,
+  tm.runtime_minutes,
+  tm.average_rating,
+  tm.num_votes,
+  tm.directors,
+  tm.actors,
   ARRAY_AGG(
     STRUCT(
+      sm.tconst AS tconst,
       sm.primary_title,
       sm.start_year,
       sm.genres,
@@ -122,11 +198,11 @@ SELECT
     )
   ) AS similar_movies
 FROM
-  MovieDetails md
+  TargetMovie tm
 CROSS JOIN
   SimilarMovies sm
 GROUP BY
-  md.primary_title, md.start_year, md.genres, md.runtime_minutes, md.average_rating, md.num_votes, md.directors, md.actors;
+  tm.primary_title, tm.start_year, tm.genres, tm.runtime_minutes, tm.average_rating, tm.num_votes, tm.directors, tm.actors;
 `;
 
 app.post('/api/search', async (req, res) => {
@@ -170,7 +246,7 @@ app.post('/api/movie', async (req, res) => {
 
     const queryOptions = {
       query: movieQuery,
-      params: { tconst },
+      params: { target_tconst: tconst },
     };
     const [rows] = await bigquery.query(queryOptions);
     if (!rows.length) {
@@ -185,15 +261,6 @@ app.post('/api/movie', async (req, res) => {
   }
 });
 //--------------------------------CALEBS CODE ENDS HERE--------------------------------
-
-
-
-
-
-
-
-
-
 
 //---------------------------------------VENKATS CODE STARTS HERE--------------------------------
 app.post('/api/filter', async (req, res) => {
@@ -247,16 +314,16 @@ app.post('/api/filter', async (req, res) => {
   }
 
   // Apply category sorting and num_votes logic
-if (category === 'popular') {
-  query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
-} else if (category === 'underrated') {
-  query += ` AND r.average_rating > 8.0 AND r.num_votes < 10000 ORDER BY r.average_rating DESC`;
-} else if (category === 'controversial') {
-  query += ` AND r.average_rating BETWEEN 5.5 AND 7.0 AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
-} else {
-  // Default ordering if no special category selected
-  query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
-}
+  if (category === 'popular') {
+    query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+  } else if (category === 'underrated') {
+    query += ` AND r.average_rating > 8.0 AND r.num_votes < 10000 ORDER BY r.average_rating DESC`;
+  } else if (category === 'controversial') {
+    query += ` AND r.average_rating BETWEEN 5.5 AND 7.0 AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+  } else {
+    // Default ordering if no special category selected
+    query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+  }
 
   query += ` LIMIT 10;`;
 
@@ -274,13 +341,6 @@ if (category === 'popular') {
   }
 });
 //---------------------------------------VENKATS CODE ENDS HERE--------------------------------
-
-
-
-
-
-
-
 
 //----------------------------MAHALAKSHMI CODE STARTS HERE----------------------------
 app.post('/api/actor', async (req, res) => {
@@ -349,8 +409,6 @@ app.post('/api/actor', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
 //----------------------------MAHALAKSHMI CODE ENDS HERE----------------------------
 
 const PORT = process.env.PORT || 3000;

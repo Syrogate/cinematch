@@ -15,176 +15,216 @@
     const { useState, useEffect } = React;
 
     const Dashboard = ({ onSelectMovie }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [genre, setGenre] = useState('');
-  const [decade, setDecade] = useState('');
-  const [duration, setDuration] = useState('');
-  const [category, setCategory] = useState('');
-  const [includeAdult, setIncludeAdult] = useState(false);
-  const [movies, setMovies] = useState([]);
+      const [searchTerm, setSearchTerm] = useState('');
+      const [genre, setGenre] = useState('');
+      const [decade, setDecade] = useState('');
+      const [duration, setDuration] = useState('');
+      const [category, setCategory] = useState('');
+      const [includeAdult, setIncludeAdult] = useState(false);
+      const [movies, setMovies] = useState([]);
 
-  const applyFilters = async () => {
-    try {
-      const response = await fetch('http://localhost:3000/api/filter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchTerm, genre, decade, duration, category, includeAdult }),
-      });
-      if (!response.ok) throw new Error('Failed to fetch movies');
-      const data = await response.json();
-      setMovies(data);
-    } catch (err) {
-      console.error(err.message);
-    }
-  };
+      const applyFilters = async () => {
+        try {
+          const response = await fetch('http://localhost:3000/api/filter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ searchTerm, genre, decade, duration, category, includeAdult }),
+          });
+          if (!response.ok) throw new Error('Failed to fetch movies');
+          const data = await response.json();
+          setMovies(data);
+        } catch (err) {
+          console.error(err.message);
+        }
+      };
 
-  return (
-    <div className="p-4 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold text-center mb-6">🎥 Movie Search</h2>
-      <div className="max-w-lg mx-auto">
-        {/* Search Bar */}
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by movie title"
-          className="w-full mb-4 p-2 border rounded"
-        />
+      return (
+        <div className="p-4 bg-white rounded-lg shadow-md">
+          <h2 className="text-2xl font-bold text-center mb-6">🎥 Movie Search</h2>
+          <div className="max-w-lg mx-auto">
+            {/* Search Bar */}
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by movie title"
+              className="w-full mb-4 p-2 border rounded"
+            />
 
-        <label>Genre:</label>
-        <select value={genre} onChange={(e) => setGenre(e.target.value)} className="w-full mb-4 p-2 border rounded">
-          <option value="">All Genres</option>
-          <option value="Action">Action</option>
-          <option value="Comedy">Comedy</option>
-          <option value="Drama">Drama</option>
-          <option value="Horror">Horror</option>
-          <option value="Romance">Romance</option>
-          <option value="Sci-Fi">Sci-Fi</option>
-          <option value="Thriller">Thriller</option>
-          <option value="Documentary">Documentary</option>
-        </select>
+            <label>Genre:</label>
+            <select value={genre} onChange={(e) => setGenre(e.target.value)} className="w-full mb-4 p-2 border rounded">
+              <option value="">All Genres</option>
+              <option value="Action">Action</option>
+              <option value="Comedy">Comedy</option>
+              <option value="Drama">Drama</option>
+              <option value="Horror">Horror</option>
+              <option value="Romance">Romance</option>
+              <option value="Sci-Fi">Sci-Fi</option>
+              <option value="Thriller">Thriller</option>
+              <option value="Documentary">Documentary</option>
+            </select>
 
-        <label>Decade:</label>
-        <select value={decade} onChange={(e) => setDecade(e.target.value)} className="w-full mb-4 p-2 border rounded">
-          <option value="">All Decades</option>
-          <option value="1980">1980s</option>
-          <option value="1990">1990s</option>
-          <option value="2000">2000s</option>
-          <option value="2010">2010s</option>
-          <option value="2020">2020s</option>
-        </select>
+            <label>Decade:</label>
+            <select value={decade} onChange={(e) => setDecade(e.target.value)} className="w-full mb-4 p-2 border rounded">
+              <option value="">All Decades</option>
+              <option value="1980">1980s</option>
+              <option value="1990">1990s</option>
+              <option value="2000">2000s</option>
+              <option value="2010">2010s</option>
+              <option value="2020">2020s</option>
+            </select>
 
-        <label>Duration:</label>
-        <select value={duration} onChange={(e) => setDuration(e.target.value)} className="w-full mb-4 p-2 border rounded">
-          <option value="">Any Duration</option>
-          <option value="short">Short (&lt;60 min)</option>
-          <option value="medium">Medium (60–120 min)</option>
-          <option value="long">Long (&gt;120 min)</option>
-        </select>
+            <label>Duration:</label>
+            <select value={duration} onChange={(e) => setDuration(e.target.value)} className="w-full mb-4 p-2 border rounded">
+              <option value="">Any Duration</option>
+              <option value="short">Short ({'<'}60 min)</option>
+              <option value="medium">Medium (60-120 min)</option>
+              <option value="long">Long ({'>'}120 min)</option>
+            </select>
 
-        <label>Category:</label>
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full mb-4 p-2 border rounded">
-          <option value="">All Categories</option>
-          <option value="popular">Most Popular</option>
-          <option value="underrated">Underrated</option>
-          <option value="controversial">Controversial</option>
-        </select>
+            <label>Category:</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full mb-4 p-2 border rounded">
+              <option value="">All Categories</option>
+              <option value="popular">Most Popular</option>
+              <option value="underrated">Underrated</option>
+              <option value="controversial">Controversial</option>
+            </select>
 
-        <div className="flex items-center mb-4">
-          <input
-            type="checkbox"
-            checked={includeAdult}
-            onChange={(e) => setIncludeAdult(e.target.checked)}
-            className="mr-2"
-          />
-          <label>Include Adult Movies</label>
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                checked={includeAdult}
+                onChange={(e) => setIncludeAdult(e.target.checked)}
+                className="mr-2"
+              />
+              <label>Include Adult Movies</label>
+            </div>
+
+            <button onClick={applyFilters} className="w-full bg-blue-500 text-white py-2 rounded">Search Movies</button>
+          </div>
+
+          <div className="mt-8 max-w-2xl mx-auto">
+            {movies.length > 0 ? (
+              <ul className="space-y-4">
+                {movies.map((movie) => (
+                  <li
+                    key={movie.tconst}
+                    onClick={() => onSelectMovie(movie.tconst)}
+                    className="p-4 bg-gray-100 rounded shadow cursor-pointer hover:bg-gray-200"
+                  >
+                    {movie.primary_title} ({movie.start_year})
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-center text-gray-500">No movies found. Try adjusting the filters.</p>
+            )}
+          </div>
         </div>
+      );
+    };
 
-        <button onClick={applyFilters} className="w-full bg-blue-500 text-white py-2 rounded">Search Movies</button>
-      </div>
+    const ActorLookup = ({ onSelectActor }) => {
+      const [actorName, setActorName] = useState('');
+      const [actors, setActors] = useState([]);
 
-      <div className="mt-8 max-w-2xl mx-auto">
-        {movies.length > 0 ? (
-          <ul className="space-y-4">
-            {movies.map((movie) => (
-              <li
-                key={movie.tconst}
-                onClick={() => onSelectMovie(movie.tconst, movie.primary_title)}
-                className="p-4 bg-gray-100 rounded shadow cursor-pointer hover:bg-gray-200"
-              >
-                {movie.primary_title} ({movie.start_year})
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-center text-gray-500">No movies found. Try adjusting the filters.</p>
+      const fetchActors = async () => {
+        if (actorName.length < 2) {
+          alert('Actor name must be at least 2 characters');
+          return;
+        }
+        try {
+          const response = await fetch('http://localhost:3000/api/actors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: actorName }),
+          });
+          if (!response.ok) throw new Error('Failed to fetch actors');
+          const data = await response.json();
+          setActors(data);
+        } catch (err) {
+          console.error(err.message);
+          setActors([]);
+        }
+      };
+
+      return (
+        <div className="p-4 bg-white rounded-lg shadow-md">
+          <h2 className="text-2xl font-bold text-center mb-6">🎭 Actor Lookup</h2>
+          <div>
+            <input
+              type="text"
+              value={actorName}
+              onChange={(e) => setActorName(e.target.value)}
+              placeholder="Search by actor name"
+              className="w-full mb-4 p-2 border rounded"
+            />
+            <button
+              onClick={fetchActors}
+              className="w-full bg-blue-500 text-white py-2 rounded"
+            >
+              Search Actors
+            </button>
+          </div>
+
+          <div className="mt-8">
+            {actors.length > 0 ? (
+              <ul className="space-y-4">
+                {actors.map((actor) => (
+                  <li
+                    key={actor.nconst}
+                    onClick={() => onSelectActor(actor)}
+                    className="p-4 bg-gray-100 rounded shadow cursor-pointer hover:bg-gray-200"
+                  >
+                    <h3 className="text-lg font-semibold">{actor.actor_name}</h3>
+                    <p><strong>Birth Year:</strong> {actor.birth_year || 'N/A'}</p>
+                    <p><strong>Age:</strong> {actor.age || 'N/A'}</p>
+                    <p><strong>Profession:</strong> {actor.profession || 'N/A'}</p>
+                    <p><strong>Known For:</strong> {actor.known_for_movies?.length ? actor.known_for_movies.join(', ') : 'N/A'}</p>
+                    <p><strong>Roles:</strong> {actor.movies_and_characters?.length ? actor.movies_and_characters.map(role => `${role.title} as ${role.character}`).join(', ') : 'N/A'}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-center text-gray-500">No actors found. Try adjusting the search term.</p>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const MovieDetails = ({ movieData, onBack, onSelectActor, onSelectMovieFromSimilar, isFetching, error }) => (
+      <div className={`container mx-auto p-4 ${isFetching ? 'cursor-wait' : ''}`}>
+        {isFetching && (
+          <div className="flex justify-center items-center mb-4">
+            <svg
+              className="animate-spin h-5 w-5 mr-3 text-blue-500"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              ></path>
+            </svg>
+            <span className="text-gray-500">Loading new movie details...</span>
+          </div>
         )}
-      </div>
-    </div>
-  );
-};
-
-const ActorLookup = ({ onSelectActor }) => {
-  const [actorName, setActorName] = useState('');
-  const [actors, setActors] = useState([]);
-
-  const fetchActors = async () => {
-    try {
-      const response = await fetch('http://localhost:3000/api/actors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: actorName }),
-      });
-      if (!response.ok) throw new Error('Failed to fetch actors');
-      const data = await response.json();
-      setActors(data);
-    } catch (err) {
-      console.error(err.message);
-    }
-  };
-
-  return (
-    <div className="p-4 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold text-center mb-6">🎭 Actor Lookup</h2>
-      <div>
-        <input
-          type="text"
-          value={actorName}
-          onChange={(e) => setActorName(e.target.value)}
-          placeholder="Search by actor name"
-          className="w-full mb-4 p-2 border rounded"
-        />
-        <button
-          onClick={fetchActors}
-          className="w-full bg-blue-500 text-white py-2 rounded"
-        >
-          Search Actors
-        </button>
-      </div>
-
-      <div className="mt-8">
-        {actors.length > 0 ? (
-          <ul className="space-y-4">
-            {actors.map((actor) => (
-              <li
-                key={actor.nconst}
-                onClick={() => onSelectActor(actor.nconst)}
-                className="p-4 bg-gray-100 rounded shadow cursor-pointer hover:bg-gray-200"
-              >
-                {actor.actor_name}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-center text-gray-500">No actors found. Try adjusting the search term.</p>
+        {error && (
+          <div className="text-center text-red-500 mb-4">
+            <p>{error}</p>
+          </div>
         )}
-      </div>
-    </div>
-  );
-};
-
-    const MovieDetails = ({ movieData, onBack, onSelectActor, onSelectMovieFromSimilar }) => (
-      <div className="container mx-auto p-4">
         <button onClick={onBack} className="mb-4 bg-gray-200 py-2 px-4 rounded">Back to Dashboard</button>
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-2xl font-semibold mb-4">{movieData.primary_title}</h2>
@@ -197,35 +237,43 @@ const ActorLookup = ({ onSelectActor }) => {
             movieData.actors.map((actor, index) => (
               <span
                 key={index}
-                onClick={() => {
-                  if (movieData.actor_nconsts && movieData.actor_nconsts[index]) {
-                    onSelectActor(movieData.actor_nconsts[index]);
-                  } else {
-                    console.warn(`Actor nconst is undefined for index: ${index}`);
-                    alert(`Details for ${actor} are not available.`);
-                  }
-                }}
+                onClick={() => onSelectActor(actor)}
                 className="text-blue-500 cursor-pointer hover:underline"
               >
-                {actor}
+                {actor}{index < movieData.actors.length - 1 ? ', ' : ''}
               </span>
-            )).reduce((prev, curr) => [prev, ', ', curr])
+            ))
           ) : 'N/A'}</p>
           <h3 className="text-xl font-semibold mt-6 mb-4">Similar Movies</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {movieData.similar_movies?.length ? (
-              movieData.similar_movies.map((movie, index) => (
-                <div
-                  key={index}
-                  className="p-4 bg-gray-50 rounded-lg shadow cursor-pointer hover:bg-gray-100"
-                  onClick={() => onSelectMovieFromSimilar(movie.tconst)}
-                >
-                  <h4 className="font-semibold">{movie.primary_title}</h4>
-                  <p><strong>Year:</strong> {movie.start_year || 'N/A'}</p>
-                  <p><strong>Genres:</strong> {movie.genres || 'N/A'}</p>
-                  <p><strong>Rating:</strong> {movie.average_rating ? movieData.average_rating.toFixed(1) : 'N/A'}</p>
-                </div>
-              ))
+              movieData.similar_movies.map((movie, index) => {
+                console.log('Similar movie object:', movie);
+                const tconst = movie.tconst; // Adjust this if the field name is different based on the backend log
+                return (
+                  <div
+                    key={index}
+                    className="p-4 bg-gray-50 rounded-lg shadow"
+                    style={{ cursor: tconst ? 'pointer' : 'not-allowed' }}
+                    onClick={() => {
+                      console.log('Clicked similar movie tconst:', tconst);
+                      if (tconst) {
+                        onSelectMovieFromSimilar(tconst);
+                      } else {
+                        console.error('No tconst found for similar movie:', movie);
+                      }
+                    }}
+                  >
+                    <h4 className="font-semibold">{movie.primary_title}</h4>
+                    <p><strong>Year:</strong> {movie.start_year || 'N/A'}</p>
+                    <p><strong>Genres:</strong> {movie.genres || 'N/A'}</p>
+                    <p><strong>Rating:</strong> {movie.average_rating ? movie.average_rating.toFixed(1) : 'N/A'}</p>
+                    {!tconst && (
+                      <p className="text-red-500 text-sm mt-2">Details not available</p>
+                    )}
+                  </div>
+                );
+              })
             ) : (
               <p>No similar movies found.</p>
             )}
@@ -235,111 +283,151 @@ const ActorLookup = ({ onSelectActor }) => {
     );
 
     const ActorDetails = ({ actorData, onBack }) => {
-  if (!actorData) {
-    return <p className="text-center text-gray-500">Loading actor details...</p>;
-  }
+      if (!actorData) {
+        return <p className="text-center text-gray-500">Loading actor details...</p>;
+      }
 
-  return (
-    <div className="p-4 bg-white rounded-lg shadow-md">
-      <button
-        onClick={onBack}
-        className="mb-4 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-      >
-        Back to Dashboard
-      </button>
-      <h2 className="text-2xl font-bold text-center mb-6">🎭 Actor Details</h2>
-      <div className="space-y-4">
-        <p><strong>Name:</strong> {actorData.actor_name}</p>
-        <p><strong>Birth Year:</strong> {actorData.actor_birth_year || 'N/A'}</p>
-        <p><strong>Age:</strong> {actorData.actor_age || 'N/A'}</p>
-        <p><strong>Profession:</strong> {actorData.primary_profession || 'N/A'}</p>
-        <p><strong>Known For:</strong> {actorData.known_for_movies?.join(', ') || 'N/A'}</p>
-        <h3 className="text-lg font-semibold mt-4">Movies</h3>
-        <ul className="list-disc pl-6">
-          {actorData.title_and_character?.map((movie, index) => (
-            <li key={index}>
-              <strong>{movie.title}</strong> as {movie.character || 'N/A'}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-};
-    
-const App = () => {
-  const [selectedTconst, setSelectedTconst] = useState('');
-  const [movieData, setMovieData] = useState(null);
-  const [selectedActorId, setSelectedActorId] = useState('');
-  const [actorData, setActorData] = useState(null);
-
-  const fetchMovieDetails = async (tconst) => {
-    try {
-      const response = await fetch('http://localhost:3000/api/movie', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tconst }),
-      });
-      if (!response.ok) throw new Error('Failed to fetch movie details');
-      const data = await response.json();
-      setMovieData(data[0]);
-    } catch (err) {
-      console.error(err.message);
-    }
-  };
-
-  const fetchActorDetails = async (nconst) => {
-    try {
-      const response = await fetch('http://localhost:3000/api/actor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nconst }),
-      });
-      if (!response.ok) throw new Error('Failed to fetch actor details');
-      const data = await response.json();
-      setActorData(data[0]);
-    } catch (err) {
-      console.error(err.message);
-    }
-  };
-
-  const handleSelectMovie = (tconst) => {
-    setSelectedTconst(tconst);
-    fetchMovieDetails(tconst);
-  };
-
-  const handleSelectActor = (nconst) => {
-    setSelectedActorId(nconst);
-    fetchActorDetails(nconst);
-  };
-
-  const handleBackToDashboard = () => {
-    setSelectedTconst('');
-    setMovieData(null);
-    setSelectedActorId('');
-    setActorData(null);
-  };
-
-  return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold text-center mb-8">🎬 Cinematch: A Smart Movie Recommender</h1>
-      {selectedTconst && movieData ? (
-        <MovieDetails
-          movieData={movieData}
-          onBack={handleBackToDashboard}
-          onSelectActor={handleSelectActor}
-        />
-      ) : selectedActorId && actorData ? (
-        <ActorDetails actorData={actorData} onBack={handleBackToDashboard} />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <Dashboard onSelectMovie={handleSelectMovie} />
-          <ActorLookup onSelectActor={handleSelectActor} />
+      return (
+        <div className="p-4 bg-white rounded-lg shadow-md">
+          <button
+            onClick={onBack}
+            className="mb-4 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+          >
+            Back to Dashboard
+          </button>
+          <h2 className="text-2xl font-bold text-center mb-6">🎭 Actor Details</h2>
+          <div className="space-y-4">
+            <p><strong>Name:</strong> {actorData.actor_name}</p>
+            <p><strong>Birth Year:</strong> {actorData.birth_year || 'N/A'}</p>
+            <p><strong>Age:</strong> {actorData.age || 'N/A'}</p>
+            <p><strong>Profession:</strong> {actorData.profession || 'N/A'}</p>
+            <p><strong>Known For:</strong> {actorData.known_for_movies?.length ? actor.known_for_movies.join(', ') : 'N/A'}</p>
+            <h3 className="text-lg font-semibold mt-4">Movies</h3>
+            <ul className="list-disc pl-6">
+              {actorData.movies_and_characters?.length ? (
+                actorData.movies_and_characters.map((movie, index) => (
+                  <li key={index}>
+                    <strong>{movie.title}</strong> as {movie.character || 'N/A'}
+                  </li>
+                ))
+              ) : (
+                <li>N/A</li>
+              )}
+            </ul>
+          </div>
         </div>
-      )}
-    </div>
-  );
-};
+      );
+    };
+
+    const App = () => {
+      const [selectedTconst, setSelectedTconst] = useState('');
+      const [pendingTconst, setPendingTconst] = useState(null);
+      const [movieData, setMovieData] = useState(null);
+      const [selectedActor, setSelectedActor] = useState(null);
+      const [error, setError] = useState(null);
+
+      const fetchMovieDetails = async (tconst) => {
+        if (!tconst || typeof tconst !== 'string' || !tconst.startsWith('tt')) {
+          console.error('Invalid tconst:', tconst);
+          setError('Invalid movie ID. Please try another movie.');
+          setPendingTconst(null);
+          return;
+        }
+
+        console.log('Fetching movie details for tconst:', tconst);
+        try {
+          setError(null);
+          const response = await fetch('http://localhost:3000/api/movie', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tconst }),
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch movie details: ${errorText}`);
+          }
+          const data = await response.json();
+          console.log('Fetched movie data:', data);
+          if (data && data.length > 0) {
+            setMovieData(data[0]);
+            setSelectedTconst(tconst);
+            setPendingTconst(null);
+          } else {
+            throw new Error('Movie not found in the database.');
+          }
+        } catch (err) {
+          console.error('Error fetching movie details:', err.message);
+          setError(err.message);
+          setPendingTconst(null);
+        }
+      };
+
+      const fetchActorDetails = async (actorName) => {
+        try {
+          const response = await fetch('http://localhost:3000/api/actors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: actorName }),
+          });
+          if (!response.ok) throw new Error('Failed to fetch actor details');
+          const data = await response.json();
+          setSelectedActor(data[0] || null); // Take the first match
+        } catch (err) {
+          console.error(err.message);
+          setSelectedActor(null);
+        }
+      };
+
+      const handleSelectMovie = (tconst) => {
+        if (tconst !== selectedTconst) {
+          setPendingTconst(tconst);
+          fetchMovieDetails(tconst);
+        }
+        setSelectedActor(null); // Reset actor selection
+        setError(null);
+      };
+
+      const handleSelectActor = (actor) => {
+        if (typeof actor === 'string') {
+          // From MovieDetails, actor is a name
+          fetchActorDetails(actor);
+        } else {
+          // From ActorLookup, actor is the full actor object
+          setSelectedActor(actor);
+        }
+      };
+
+      const handleBackToDashboard = () => {
+        setSelectedTconst('');
+        setPendingTconst(null);
+        setMovieData(null);
+        setSelectedActor(null);
+        setError(null);
+      };
+
+      return (
+        <div className="container mx-auto p-4">
+          <h1 className="text-3xl font-bold text-center mb-8">🎬 Cinematch: A Smart Movie Recommender</h1>
+          {(selectedTconst || pendingTconst) && movieData ? (
+            <MovieDetails
+              movieData={movieData}
+              onBack={handleBackToDashboard}
+              onSelectActor={handleSelectActor}
+              onSelectMovieFromSimilar={handleSelectMovie}
+              isFetching={!!pendingTconst}
+              error={error}
+            />
+          ) : selectedActor ? (
+            <ActorDetails actorData={selectedActor} onBack={handleBackToDashboard} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <Dashboard onSelectMovie={handleSelectMovie} />
+              <ActorLookup onSelectActor={handleSelectActor} />
+            </div>
+          )}
+        </div>
+      );
+    };
 
     ReactDOM.render(<App />, document.getElementById('root'));
   </script>

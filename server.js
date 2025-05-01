@@ -263,6 +263,28 @@ app.post('/api/movie', async (req, res) => {
 //--------------------------------CALEBS CODE ENDS HERE--------------------------------
 
 //---------------------------------------VENKATS CODE STARTS HERE--------------------------------
+const actorSearchQuery = `
+  SELECT
+    n.nconst,
+    IFNULL(n.primary_name, 'Unknown') AS actor_name,
+    IFNULL(n.birth_year, 0) AS birth_year,
+    ARRAY_AGG(DISTINCT b.primary_title IGNORE NULLS) AS known_for_movies
+  FROM \`bigquery-public-data.imdb.name_basics\` n
+  LEFT JOIN UNNEST(SPLIT(n.known_for_titles, ',')) AS kft
+  LEFT JOIN \`bigquery-public-data.imdb.title_basics\` b
+    ON kft = b.tconst AND b.title_type = 'movie'
+  WHERE
+    LOWER(TRIM(n.primary_name)) LIKE LOWER(@name)
+    AND EXISTS (
+      SELECT 1
+      FROM UNNEST(SPLIT(n.primary_profession, ',')) AS prof
+      WHERE LOWER(TRIM(prof)) IN ('actor', 'actress')
+    )
+  GROUP BY n.nconst, n.primary_name, n.birth_year
+  ORDER BY actor_name ASC
+  LIMIT 10;
+`;
+
 app.post('/api/filter', async (req, res) => {
   const { searchTerm, genre, decade, duration, category, includeAdult } = req.body;
 
@@ -354,88 +376,8 @@ app.post('/api/actors', async (req, res) => {
   }
 
   const cacheKey = `actor_search:${name.toLowerCase()}`;
-  const actorSearchQuery = `
-    WITH FilteredNames AS (
-      SELECT
-        n.nconst,
-        n.primary_name,
-        n.birth_year,
-        n.primary_profession
-      FROM
-        \`bigquery-public-data.imdb.name_basics\` n
-      WHERE
-        LOWER(n.primary_name) LIKE LOWER(@name)
-        AND IFNULL(SPLIT(n.primary_profession, ',')[SAFE_OFFSET(0)], '') IN ('actor', 'actress')
-    ),
-    FilteredPrincipals AS (
-      SELECT
-        tp.nconst,
-        tp.tconst,
-        tp.characters
-      FROM
-        \`bigquery-public-data.imdb.title_principals\` tp
-      JOIN
-        FilteredNames fn
-      ON
-        tp.nconst = fn.nconst
-      WHERE
-        tp.category IN ('actor', 'actress')
-    ),
-    TopMovies AS (
-      SELECT
-        fp.nconst,
-        t.primary_title,
-        REGEXP_REPLACE(JSON_EXTRACT_ARRAY(fp.characters)[SAFE_OFFSET(0)], r'^"(.*)"$', r'\\1') AS character,
-        t.start_year
-      FROM
-        FilteredPrincipals fp
-      JOIN
-        \`bigquery-public-data.imdb.title_basics\` t
-      ON
-        fp.tconst = t.tconst
-      WHERE
-        t.title_type = 'movie'
-        AND t.start_year BETWEEN 1980 AND 2025
-      QUALIFY
-        ROW_NUMBER() OVER (PARTITION BY fp.nconst ORDER BY t.start_year DESC) <= 5
-    )
-    SELECT DISTINCT
-      fn.nconst,
-      IFNULL(fn.primary_name, 'Unknown') AS actor_name,
-      fn.birth_year AS birth_year,
-      IFNULL(
-        CAST(
-          CASE 
-            WHEN fn.birth_year IS NOT NULL THEN 2025 - fn.birth_year
-            ELSE NULL
-          END AS STRING
-        ),
-        'Unknown'
-      ) AS age,
-      IFNULL(fn.primary_profession, 'Unknown') AS profession,
-      ARRAY_AGG(DISTINCT tm.primary_title IGNORE NULLS) AS known_for_movies,
-      ARRAY_AGG(
-        DISTINCT TO_JSON_STRING(
-          STRUCT(
-            IFNULL(tm.primary_title, 'Unknown') AS title,
-            IFNULL(tm.character, 'Unknown') AS character
-          )
-        ) IGNORE NULLS
-      ) AS movies_and_characters
-    FROM
-      FilteredNames fn
-    LEFT JOIN
-      TopMovies tm
-    ON
-      fn.nconst = tm.nconst
-    GROUP BY
-      fn.nconst, fn.primary_name, fn.birth_year, fn.primary_profession
-    ORDER BY
-      actor_name ASC
-    LIMIT 10;
-  `;
 
-  const params = { name: `%${name}%` };
+  const params = { name: `${name}%` };
 
   try {
     // Check Redis cache first
@@ -444,29 +386,110 @@ app.post('/api/actors', async (req, res) => {
       return res.json(JSON.parse(cached));
     }
 
-    // Log the query and parameters for debugging
-    console.log('Actor Search Query:', actorSearchQuery);
-    console.log('Parameters:', params);
 
     const [rows] = await bigquery.query({ query: actorSearchQuery, params });
-    console.log('Actor Search Results:', rows);
 
-    // Parse the movies_and_characters JSON strings into objects
-    rows.forEach(row => {
-      if (row.movies_and_characters) {
-        row.movies_and_characters = row.movies_and_characters.map(str => JSON.parse(str));
-      }
-    });
+    
+    const cleanRows = rows.map(row => ({
+      nconst: row.nconst,
+      actor_name: row.actor_name,
+      birth_year: row.birth_year,
+      known_for_movies: row.known_for_movies
+    }));
 
-    // Cache the results in Redis for 24 hours (86400 seconds)
-    await redisClient.setEx(cacheKey, 86400, JSON.stringify(rows));
-    res.json(rows);
+    await redisClient.setEx(cacheKey, 86400, JSON.stringify(cleanRows));
+    res.json(cleanRows);
   } catch (err) {
     console.error('Error in /api/actors:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 //---------------------------------------VENKATS CODE ENDS HERE--------------------------------
+
+
+
+
+//----------------------------MAHALAKSHMI CODE STARTS HERE----------------------------
+const actor_query = `
+  SELECT
+    n.nconst,
+    IFNULL(n.primary_name, 'Unknown') AS actor_name,
+    IFNULL(n.birth_year, 0) AS birth_year,
+    IFNULL(
+      CAST(
+        CASE 
+          WHEN n.birth_year IS NOT NULL AND n.birth_year != 0 THEN 2025 - n.birth_year
+          ELSE NULL
+        END AS STRING
+      ),
+      'Unknown'
+    ) AS age,
+    IFNULL(n.primary_profession, 'Unknown') AS profession,
+    ARRAY_AGG(DISTINCT t.primary_title IGNORE NULLS) AS known_for_movies,
+    ARRAY_AGG(
+      DISTINCT TO_JSON_STRING(
+        STRUCT(
+          IFNULL(t.primary_title, 'Unknown') AS title,
+          IFNULL(
+            REGEXP_REPLACE(tp.characters, r'^\\["?(.*?)"?\\]$', r'\\1'),
+            'Unknown'
+          ) AS character
+        )
+      )
+      IGNORE NULLS
+    ) AS movies_and_characters
+  FROM \`bigquery-public-data.imdb.name_basics\` n
+  LEFT JOIN UNNEST(SPLIT(n.known_for_titles, ',')) kft ON TRUE
+  LEFT JOIN \`bigquery-public-data.imdb.title_basics\` t
+    ON t.tconst = kft AND t.title_type = 'movie'
+  LEFT JOIN \`bigquery-public-data.imdb.title_principals\` tp
+    ON tp.tconst = t.tconst AND tp.nconst = n.nconst AND tp.category IN ('actor', 'actress')
+  WHERE
+    n.nconst = @nconst
+    AND EXISTS (
+      SELECT 1 FROM UNNEST(SPLIT(n.primary_profession, ',')) AS prof
+      WHERE LOWER(TRIM(prof)) IN ('actor', 'actress')
+    )
+  GROUP BY
+    n.nconst, n.primary_name, n.birth_year, n.primary_profession
+  LIMIT 1
+`;
+
+
+
+
+  app.post('/api/actor', async (req, res) => {
+    const { nconst } = req.body;
+  
+    if (!nconst) {
+      return res.status(400).json({ error: 'Actor ID is required' });
+    }
+  
+    const params = { nconst };
+  
+    try {
+      const [rows] = await bigquery.query({
+        query: actor_query,
+        params,
+        useLegacySql: false,
+      });
+  
+      if (rows.length > 0 && rows[0].movies_and_characters) {
+        rows[0].movies_and_characters = rows[0].movies_and_characters.map((str) =>
+          JSON.parse(str)
+        );
+      }
+  
+      res.json(rows[0] || {}); // Send single object
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+
+
+//----------------------------MAHALAKSHMI CODE ENDS HERE----------------------------
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

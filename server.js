@@ -313,7 +313,7 @@ app.post('/api/filter', async (req, res) => {
   }
 
   if (searchTerm) {
-    query += ` AND b.primary_title LIKE @searchTerm`;
+    query += ` AND LOWER(b.primary_title) LIKE LOWER(@searchTerm)`;
     params.searchTerm = `%${searchTerm}%`;
   }
 

@@ -42,7 +42,6 @@
         <div className="p-4 bg-white rounded-lg shadow-md">
           <h2 className="text-2xl font-bold text-center mb-6">🎥 Movie Search</h2>
           <div className="max-w-lg mx-auto">
-            {/* Search Bar */}
             <input
               type="text"
               value={searchTerm}
@@ -173,15 +172,14 @@
                 {actors.map((actor) => (
                   <li
                     key={actor.nconst}
-                    onClick={() => onSelectActor(actor)}
+                    onClick={() => {
+    onSelectActor(actor);
+  }}
                     className="p-4 bg-gray-100 rounded shadow cursor-pointer hover:bg-gray-200"
                   >
                     <h3 className="text-lg font-semibold">{actor.actor_name}</h3>
                     <p><strong>Birth Year:</strong> {actor.birth_year || 'N/A'}</p>
-                    <p><strong>Age:</strong> {actor.age || 'N/A'}</p>
-                    <p><strong>Profession:</strong> {actor.profession || 'N/A'}</p>
                     <p><strong>Known For:</strong> {actor.known_for_movies?.length ? actor.known_for_movies.join(', ') : 'N/A'}</p>
-                    <p><strong>Roles:</strong> {actor.movies_and_characters?.length ? actor.movies_and_characters.map(role => `${role.title} as ${role.character}`).join(', ') : 'N/A'}</p>
                   </li>
                 ))}
               </ul>
@@ -248,7 +246,6 @@
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {movieData.similar_movies?.length ? (
               movieData.similar_movies.map((movie, index) => {
-                console.log('Similar movie object:', movie);
                 const tconst = movie.tconst; // Adjust this if the field name is different based on the backend log
                 return (
                   <div
@@ -256,7 +253,6 @@
                     className="p-4 bg-gray-50 rounded-lg shadow"
                     style={{ cursor: tconst ? 'pointer' : 'not-allowed' }}
                     onClick={() => {
-                      console.log('Clicked similar movie tconst:', tconst);
                       if (tconst) {
                         onSelectMovieFromSimilar(tconst);
                       } else {
@@ -301,7 +297,7 @@
             <p><strong>Birth Year:</strong> {actorData.birth_year || 'N/A'}</p>
             <p><strong>Age:</strong> {actorData.age || 'N/A'}</p>
             <p><strong>Profession:</strong> {actorData.profession || 'N/A'}</p>
-            <p><strong>Known For:</strong> {actorData.known_for_movies?.length ? actor.known_for_movies.join(', ') : 'N/A'}</p>
+            <p><strong>Known For:</strong> {actorData.known_for_movies?.length ? actorData.known_for_movies.join(', ') : 'N/A'}</p>
             <h3 className="text-lg font-semibold mt-4">Movies</h3>
             <ul className="list-disc pl-6">
               {actorData.movies_and_characters?.length ? (
@@ -334,7 +330,6 @@
           return;
         }
 
-        console.log('Fetching movie details for tconst:', tconst);
         try {
           setError(null);
           const response = await fetch('http://localhost:3000/api/movie', {
@@ -347,7 +342,6 @@
             throw new Error(`Failed to fetch movie details: ${errorText}`);
           }
           const data = await response.json();
-          console.log('Fetched movie data:', data);
           if (data && data.length > 0) {
             setMovieData(data[0]);
             setSelectedTconst(tconst);
@@ -362,16 +356,16 @@
         }
       };
 
-      const fetchActorDetails = async (actorName) => {
+      const fetchActorDetails = async (nconst) => {
         try {
-          const response = await fetch('http://localhost:3000/api/actors', {
+          const response = await fetch('http://localhost:3000/api/actor', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: actorName }),
+            body: JSON.stringify({ nconst }),
           });
           if (!response.ok) throw new Error('Failed to fetch actor details');
           const data = await response.json();
-          setSelectedActor(data[0] || null); // Take the first match
+          setSelectedActor(data); // Take the first match
         } catch (err) {
           console.error(err.message);
           setSelectedActor(null);
@@ -388,12 +382,8 @@
       };
 
       const handleSelectActor = (actor) => {
-        if (typeof actor === 'string') {
-          // From MovieDetails, actor is a name
-          fetchActorDetails(actor);
-        } else {
-          // From ActorLookup, actor is the full actor object
-          setSelectedActor(actor);
+        if (actor.nconst) {
+          fetchActorDetails(actor.nconst);
         }
       };
 

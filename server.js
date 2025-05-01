@@ -264,15 +264,20 @@ app.post('/api/movie', async (req, res) => {
 
 //---------------------------------------VENKATS CODE STARTS HERE--------------------------------
 const actorSearchQuery = `
+  WITH filtered_titles AS (
+    SELECT tconst, primary_title
+    FROM \`bigquery-public-data.imdb.title_basics\`
+    WHERE title_type = 'movie'
+  )
   SELECT
     n.nconst,
     IFNULL(n.primary_name, 'Unknown') AS actor_name,
     IFNULL(n.birth_year, 0) AS birth_year,
-    ARRAY_AGG(DISTINCT b.primary_title IGNORE NULLS) AS known_for_movies
+    ARRAY_AGG(DISTINCT ft.primary_title IGNORE NULLS) AS known_for_movies
   FROM \`bigquery-public-data.imdb.name_basics\` n
   LEFT JOIN UNNEST(SPLIT(n.known_for_titles, ',')) AS kft
-  LEFT JOIN \`bigquery-public-data.imdb.title_basics\` b
-    ON kft = b.tconst AND b.title_type = 'movie'
+  LEFT JOIN filtered_titles ft
+    ON kft = ft.tconst
   WHERE
     LOWER(TRIM(n.primary_name)) LIKE LOWER(@name)
     AND EXISTS (
@@ -285,74 +290,83 @@ const actorSearchQuery = `
   LIMIT 10;
 `;
 
+
 app.post('/api/filter', async (req, res) => {
   const { searchTerm, genre, decade, duration, category, includeAdult } = req.body;
 
   // Base query
   let query = `
-    SELECT 
-      b.tconst,
-      b.primary_title,
-      b.start_year,
-      b.genres,
-      b.runtime_minutes,
-      r.average_rating,
-      r.num_votes
-    FROM \`bigquery-public-data.imdb.title_basics\` AS b
-    JOIN \`bigquery-public-data.imdb.title_ratings\` AS r
-    ON b.tconst = r.tconst
-    WHERE b.title_type = 'movie'
-      AND b.start_year IS NOT NULL
-  `;
+  WITH filtered_basics AS (
+    SELECT tconst,
+  primary_title,
+  start_year,
+  genres,
+  runtime_minutes 
+    FROM \`bigquery-public-data.imdb.title_basics\`
+    WHERE title_type = 'movie'
+      AND start_year IS NOT NULL
+`;
 
-  // Filters
-  const params = {};
+const params = {};
 
-  if (!includeAdult) {
-    query += ` AND b.is_adult = 0`;
-  }
+// Filters inside CTE (on title_basics)
+if (!includeAdult) {
+  query += ` AND is_adult = 0`;
+}
 
-  if (searchTerm) {
-    query += ` AND LOWER(b.primary_title) LIKE LOWER(@searchTerm)`;
-    params.searchTerm = `%${searchTerm}%`;
-  }
+if (searchTerm) {
+  query += ` AND LOWER(primary_title) LIKE LOWER(@searchTerm)`;
+  params.searchTerm = `%${searchTerm}%`;
+}
 
-  if (genre) {
-    query += ` AND b.genres LIKE @genre`;
-    params.genre = `%${genre}%`;
-  }
+if (genre) {
+  query += ` AND genres LIKE @genre`;
+  params.genre = `%${genre}%`;
+}
 
-  if (decade) {
-    const startYear = parseInt(decade, 10);
-    const endYear = startYear + 9;
-    query += ` AND b.start_year BETWEEN @startYear AND @endYear`;
-    params.startYear = startYear;
-    params.endYear = endYear;
-  }
+if (decade) {
+  const startYear = parseInt(decade, 10);
+  const endYear = startYear + 9;
+  query += ` AND start_year BETWEEN @startYear AND @endYear`;
+  params.startYear = startYear;
+  params.endYear = endYear;
+}
 
-  if (duration) {
-    if (duration === 'short') {
-      query += ` AND b.runtime_minutes < 60`;
-    } else if (duration === 'medium') {
-      query += ` AND b.runtime_minutes BETWEEN 60 AND 120`;
-    } else if (duration === 'long') {
-      query += ` AND b.runtime_minutes > 120`;
-    }
-  }
+if (duration === 'short') {
+  query += ` AND runtime_minutes < 60`;
+} else if (duration === 'medium') {
+  query += ` AND runtime_minutes BETWEEN 60 AND 120`;
+} else if (duration === 'long') {
+  query += ` AND runtime_minutes > 120`;
+}
 
-  // Apply category sorting and num_votes logic
-  if (category === 'popular') {
-    query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
-  } else if (category === 'underrated') {
-    query += ` AND r.average_rating > 8.0 AND r.num_votes < 10000 ORDER BY r.average_rating DESC`;
-  } else if (category === 'controversial') {
-    query += ` AND r.average_rating BETWEEN 5.5 AND 7.0 AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
-  } else {
-    // Default ordering if no special category selected
-    query += ` AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
-  }
+query += `
+  )
+  SELECT 
+    b.tconst,
+    b.primary_title,
+    b.start_year,
+    b.genres,
+    b.runtime_minutes,
+    r.average_rating,
+    r.num_votes
+  FROM filtered_basics AS b
+  JOIN \`bigquery-public-data.imdb.title_ratings\` AS r
+  ON b.tconst = r.tconst
+`;
 
-  query += ` LIMIT 10;`;
+// Final category filter + ORDER
+if (category === 'popular') {
+  query += ` WHERE r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+} else if (category === 'underrated') {
+  query += ` WHERE r.average_rating > 8.0 AND r.num_votes < 10000 ORDER BY r.average_rating DESC`;
+} else if (category === 'controversial') {
+  query += ` WHERE r.average_rating BETWEEN 5.5 AND 7.0 AND r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+} else {
+  query += ` WHERE r.num_votes > 10000 ORDER BY r.num_votes DESC`;
+}
+
+query += ` LIMIT 10;`;
 
   try {
     const queryOptions = {
